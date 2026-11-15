@@ -602,12 +602,44 @@ if (fs.existsSync(distPath)) {
   console.log(`[Static] Serving frontend from ${distPath}`);
   app.use(express.static(distPath));
 
-  // SPA Fallback for non-API requests (Express 5 compatible)
+  // Dynamic OpenGraph injector for social crawlers (Messenger, Facebook, WhatsApp, LinkedIn, Twitter, Telegram)
   app.use((req, res, next) => {
-    if (!req.path.startsWith('/api')) {
-      return res.sendFile(path.join(distPath, 'index.html'));
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
     }
-    next();
+
+    const indexPath = path.join(distPath, 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      return next();
+    }
+
+    try {
+      let html = fs.readFileSync(indexPath, 'utf8');
+
+      // Determine full canonical host origin
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const host = req.headers['x-forwarded-host'] || req.get('host') || 'lawandlegacy.com.bd';
+      const origin = `${proto}://${host}`;
+      const canonicalUrl = `${origin}${req.path}`;
+      const ogImageUrl = `${origin}/og-image.png`;
+
+      // Replace relative OG image and canonical URLs with absolute URLs for social crawlers
+      html = html.replace(/content="\/og-image\.png"/g, `content="${ogImageUrl}"`);
+      
+      // Inject og:url and canonical if missing
+      if (!html.includes('<meta property="og:url"')) {
+        html = html.replace(
+          '</head>',
+          `  <meta property="og:url" content="${canonicalUrl}" />\n  <link rel="canonical" href="${canonicalUrl}" />\n</head>`
+        );
+      }
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
+    } catch (err) {
+      console.error('Error serving index.html with dynamic metadata:', err);
+      return res.sendFile(indexPath);
+    }
   });
 }
 
