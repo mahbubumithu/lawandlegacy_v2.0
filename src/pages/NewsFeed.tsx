@@ -2,10 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Navigation } from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { CalendarDays, ExternalLink } from "lucide-react";
-import { Link } from "react-router-dom";
+import { CalendarDays, ExternalLink, Sparkles } from "lucide-react";
 
 const NewsFeed = () => {
   const { data: events, isLoading } = useQuery({
@@ -21,82 +18,93 @@ const NewsFeed = () => {
   });
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Background ambient lighting */}
+      <div className="absolute top-20 left-10 w-80 h-80 bg-blue-900/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-20 right-10 w-96 h-96 bg-amber-400/5 rounded-full blur-3xl pointer-events-none" />
+
       <Navigation />
-      <div className="pt-24 pb-16">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-              News & Events
+
+      <div className="pt-32 pb-20 relative z-10">
+        <div className="container mx-auto px-4 max-w-7xl">
+          <div className="text-center mb-16 max-w-2xl mx-auto">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full glass-panel border-amber-400/30 text-amber-300 text-xs font-semibold mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Chamber Dispatches & Legal Seminars</span>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-extrabold text-foreground mb-4 font-serif">
+              News & Legal Insights
             </h1>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Stay updated with our latest events, seminars, and legal news.
+            <div className="w-24 h-1 bg-gradient-to-r from-amber-500/80 via-amber-300 to-amber-500/80 mx-auto mb-6 rounded-full" />
+            <p className="text-muted-foreground text-base leading-relaxed">
+              Dispatches on key appellate decisions, regulatory compliance changes, legal seminars, and symposiums led by Law & Legacy advocates.
             </p>
           </div>
 
           {isLoading ? (
-            <div className="text-center text-muted-foreground py-12">Loading events...</div>
+            <div className="text-center text-muted-foreground py-16">Loading chamber dispatches...</div>
           ) : events && events.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
               {events.map((event) => (
-                <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow border-gold/20">
-                  {event.image_url && (
-                    <div className="aspect-video overflow-hidden">
-                      <img
-                        src={event.image_url}
-                        alt={event.title}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
-                  <CardHeader>
-                    <CardTitle className="text-lg text-foreground">{event.title}</CardTitle>
-                    {event.event_date && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <CalendarDays className="h-4 w-4" />
-                        {new Date(event.event_date).toLocaleDateString("en-BD", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
+                <div
+                  key={event.id}
+                  className="glass-card glass-card-hover rounded-2xl overflow-hidden border border-white/20 dark:border-white/10 flex flex-col justify-between"
+                >
+                  <div>
+                    {event.image_url && (
+                      <div className="aspect-video overflow-hidden">
+                        <img
+                          src={event.image_url}
+                          alt={event.title}
+                          className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                        />
                       </div>
                     )}
-                  </CardHeader>
-                  <CardContent>
-                    {event.description && (
-                      <p className="text-muted-foreground text-sm mb-4">{event.description}</p>
-                    )}
-                    {event.event_url && (
+                    <div className="p-6">
+                      <div className="flex items-center gap-2 text-xs text-amber-300 font-medium mb-3">
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        {event.event_date ? (
+                          new Date(event.event_date).toLocaleDateString("en-BD", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })
+                        ) : (
+                          "Chamber Announcement"
+                        )}
+                      </div>
+                      <h3 className="text-lg font-bold text-foreground mb-2 font-serif leading-snug">
+                        {event.title}
+                      </h3>
+                      {event.description && (
+                        <p className="text-muted-foreground text-xs leading-relaxed">
+                          {event.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {event.event_url && (
+                    <div className="p-6 pt-0">
                       <a
                         href={event.event_url}
                         target="_blank"
                         rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-amber-300 hover:underline font-semibold"
                       >
-                        <Button variant="outline" size="sm" className="gap-2 border-gold/30 text-gold hover:bg-gold/10">
-                          <ExternalLink className="h-4 w-4" />
-                          View Details
-                        </Button>
+                        Read Event Details <ExternalLink className="h-3.5 w-3.5" />
                       </a>
-                    )}
-                  </CardContent>
-                </Card>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           ) : (
-            <div className="text-center text-muted-foreground py-12">
-              No events posted yet. Check back soon!
-            </div>
+            <div className="text-center text-muted-foreground py-16">No news items published yet.</div>
           )}
-
-          <div className="text-center mt-12">
-            <Link to="/">
-              <Button variant="outline" className="border-gold/30 text-gold hover:bg-gold/10">
-                ← Back to Home
-              </Button>
-            </Link>
-          </div>
         </div>
       </div>
+
       <Footer />
     </div>
   );

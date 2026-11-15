@@ -92,12 +92,12 @@ const AdminEvents = () => {
             <h1 className="text-3xl font-bold text-foreground">Event Manager</h1>
             <div className="flex gap-2">
               <Link to="/admin">
-                <Button variant="outline" size="sm" className="border-gold/30 text-gold hover:bg-gold/10">
+                <Button variant="outline" size="sm" className="border-amber-400/30 text-amber-400 hover:bg-amber-400/10">
                   ← Dashboard
                 </Button>
               </Link>
               <Link to="/news">
-                <Button variant="outline" size="sm" className="border-gold/30 text-gold hover:bg-gold/10">
+                <Button variant="outline" size="sm" className="border-amber-400/30 text-amber-400 hover:bg-amber-400/10">
                   View News Feed
                 </Button>
               </Link>
@@ -154,7 +154,7 @@ const AdminEvents = () => {
                     onChange={(e) => setEventDate(e.target.value)}
                   />
                 </div>
-                <Button type="submit" disabled={addEvent.isPending} className="bg-gold text-navy hover:bg-gold/90">
+                <Button type="submit" disabled={addEvent.isPending} className="bg-gradient-to-r from-[#0B1E3D] via-[#142C54] to-[#0B1E3D] hover:from-[#133060] hover:to-[#1B3F78] text-white font-bold border border-amber-400/40 shadow-md">
                   {addEvent.isPending ? "Adding..." : "Add Event"}
                 </Button>
               </form>

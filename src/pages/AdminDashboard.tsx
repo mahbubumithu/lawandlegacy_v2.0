@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { api, SlideItem } from "@/lib/api";
 import { Navigation } from "@/components/Navigation";
 import { Footer } from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Save, Plus, Trash2, LogOut } from "lucide-react";
+import { Save, Plus, Trash2, LogOut, Upload, Image as ImageIcon, CheckCircle2, XCircle, RefreshCw, KeyRound, ShieldAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const AdminDashboard = () => {
@@ -80,10 +81,13 @@ const AdminDashboard = () => {
       <div className="pt-24 pb-16">
         <div className="container mx-auto px-4 max-w-5xl">
           <div className="flex items-center justify-between mb-8">
-            <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
+            <div>
+              <h1 className="text-3xl font-bold text-foreground font-serif">Chamber Admin Portal</h1>
+              <p className="text-sm text-muted-foreground mt-1">Manage website content, legal team, practice areas, and hero slide images</p>
+            </div>
             <div className="flex gap-2">
               <Link to="/admin/events">
-                <Button variant="outline" size="sm" className="border-gold/30 text-gold hover:bg-gold/10">
+                <Button variant="outline" size="sm" className="border-amber-400/30 text-amber-400 hover:bg-amber-400/10">
                   Event Manager
                 </Button>
               </Link>
@@ -93,8 +97,9 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          <Tabs defaultValue="hero" className="space-y-6">
-            <TabsList className="grid grid-cols-4 lg:grid-cols-7 w-full">
+          <Tabs defaultValue="slides" className="space-y-6">
+            <TabsList className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 w-full glass-panel">
+              <TabsTrigger value="slides" className="font-semibold text-amber-300">Slides</TabsTrigger>
               <TabsTrigger value="hero">Hero</TabsTrigger>
               <TabsTrigger value="about">About</TabsTrigger>
               <TabsTrigger value="practice_areas">Practice</TabsTrigger>
@@ -102,8 +107,12 @@ const AdminDashboard = () => {
               <TabsTrigger value="clients">Clients</TabsTrigger>
               <TabsTrigger value="contact">Contact</TabsTrigger>
               <TabsTrigger value="footer">Footer</TabsTrigger>
+              <TabsTrigger value="security" className="text-amber-300 font-semibold">Security</TabsTrigger>
             </TabsList>
 
+            <TabsContent value="slides">
+              <SlidesEditor />
+            </TabsContent>
             <TabsContent value="hero">
               <HeroEditor content={allContent?.hero || {}} onSave={updateContent.mutate} />
             </TabsContent>
@@ -125,6 +134,9 @@ const AdminDashboard = () => {
             <TabsContent value="footer">
               <FooterEditor content={allContent?.footer || {}} onSave={updateContent.mutate} />
             </TabsContent>
+            <TabsContent value="security">
+              <SecurityEditor />
+            </TabsContent>
           </Tabs>
         </div>
       </div>
@@ -136,6 +148,319 @@ const AdminDashboard = () => {
 // --- Section Editors ---
 
 type SaveFn = (args: { section: string; key: string; value: any }) => void;
+
+function SlidesEditor() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [title, setTitle] = useState("");
+  const [caption, setCaption] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+
+  const { data: slides, isLoading } = useQuery({
+    queryKey: ["hero_slides"],
+    queryFn: () => api.getSlides(),
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const objectUrl = URL.createObjectURL(file);
+      setPreviewUrl(objectUrl);
+    }
+  };
+
+  const handleUrlChange = (val: string) => {
+    setImageUrl(val);
+    if (!selectedFile) {
+      setPreviewUrl(val);
+    }
+  };
+
+  const createSlideMutation = useMutation({
+    mutationFn: async () => {
+      setIsUploading(true);
+      let finalUrl = imageUrl.trim();
+
+      if (selectedFile) {
+        const uploadRes = await api.uploadImage(selectedFile);
+        finalUrl = uploadRes.url;
+      }
+
+      if (!finalUrl) {
+        throw new Error("Please select an image file or provide an image URL");
+      }
+
+      const nextOrder = (slides?.length || 0) + 1;
+      return await api.createSlide({
+        title: title.trim() || "Chamber Slide",
+        caption: caption.trim() || title.trim() || "Law & Legacy Supreme Court Practice",
+        image_url: finalUrl,
+        display_order: nextOrder,
+        is_active: true,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hero_slides"] });
+      toast({ title: "Slide added!", description: "New hero slide image is now live on the homepage." });
+      setTitle("");
+      setCaption("");
+      setImageUrl("");
+      setSelectedFile(null);
+      setPreviewUrl("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    },
+    onError: (err: any) => {
+      toast({ title: "Failed to add slide", description: err.message || "Upload error", variant: "destructive" });
+    },
+    onSettled: () => {
+      setIsUploading(false);
+    },
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: async (slide: SlideItem) => {
+      await api.updateSlide(slide.id, { is_active: !slide.is_active });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hero_slides"] });
+      toast({ title: "Slide status updated" });
+    },
+  });
+
+  const deleteSlideMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.deleteSlide(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hero_slides"] });
+      toast({ title: "Slide removed" });
+    },
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Upload New Slide Form */}
+      <Card className="border-amber-400/20 glass-card">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <ImageIcon className="h-5 w-5 text-amber-300" />
+            <CardTitle className="font-serif">Upload & Manage Hero Background Slides</CardTitle>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Upload custom high-resolution photographs or legal imagery that rotate dynamically in the homepage Hero background slider.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Left: File Upload and URL Inputs */}
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-semibold text-foreground mb-1.5 block">
+                  Option 1: Upload Image File from Computer
+                </label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                    className="cursor-pointer file:bg-amber-400/20 file:text-amber-200 file:border-0 file:rounded-md file:px-2 file:py-1 file:mr-2"
+                  />
+                  {selectedFile && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedFile(null);
+                        setPreviewUrl(imageUrl);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                      className="text-muted-foreground hover:text-destructive text-xs"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">Supports PNG, JPG, WebP, AVIF (saved directly to server storage).</p>
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-foreground mb-1.5 block">
+                  Option 2: Or Paste External Image URL
+                </label>
+                <Input
+                  placeholder="https://images.unsplash.com/... or https://..."
+                  value={imageUrl}
+                  onChange={(e) => handleUrlChange(e.target.value)}
+                  disabled={Boolean(selectedFile)}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-foreground mb-1.5 block">
+                  Slide Title / Label (Optional)
+                </label>
+                <Input
+                  placeholder="e.g. Supreme Court High Court Division"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-semibold text-foreground mb-1.5 block">
+                  Slide Caption / Description
+                </label>
+                <Input
+                  placeholder="e.g. Apex Court Advisory & Corporate Dispute Resolution"
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                />
+              </div>
+
+              <Button
+                onClick={() => createSlideMutation.mutate()}
+                disabled={isUploading || (!selectedFile && !imageUrl.trim())}
+                className="w-full bg-gradient-to-r from-[#0B1E3D] via-[#142C54] to-[#0B1E3D] hover:from-[#133060] hover:to-[#1B3F78] text-white font-bold border border-amber-400/40 shadow-md"
+              >
+                {isUploading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin text-amber-300" />
+                    Uploading Slide Image...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2 text-amber-300" />
+                    Upload & Add to Hero Slider
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Right: Live Preview Box */}
+            <div className="flex flex-col justify-center items-center p-4 rounded-xl border border-dashed border-white/20 bg-black/20 min-h-[220px]">
+              {previewUrl ? (
+                <div className="w-full space-y-2 text-center">
+                  <div className="relative rounded-lg overflow-hidden border border-white/20 shadow-md max-h-[240px]">
+                    <img src={previewUrl} alt="Slide Preview" className="w-full h-44 object-cover" />
+                    <div className="absolute inset-0 bg-black/30 flex items-end p-3">
+                      <p className="text-white text-xs font-semibold drop-shadow">{caption || title || "Preview Caption"}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-amber-300 font-medium">Ready to upload to Hero slider</p>
+                </div>
+              ) : (
+                <div className="text-center p-6 text-muted-foreground space-y-2">
+                  <ImageIcon className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                  <p className="text-xs">Select a local photo or paste a URL to see live preview</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Current Slides Gallery */}
+      <Card className="border-amber-400/20 glass-card">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="font-serif text-lg">Active Hero Slider Gallery ({slides?.length || 0})</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => queryClient.invalidateQueries({ queryKey: ["hero_slides"] })}
+              className="text-xs border-white/20"
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1" /> Refresh
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            The homepage rotates through active slides automatically every 6 seconds.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">Loading slides...</p>
+          ) : !slides || slides.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">No slides found in database.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {slides.map((slide, idx) => (
+                <div
+                  key={slide.id}
+                  className={`rounded-xl border p-3 flex flex-col justify-between transition-all bg-card/60 backdrop-blur-sm ${
+                    slide.is_active ? "border-amber-400/30 shadow-md" : "border-border/30 opacity-60"
+                  }`}
+                >
+                  <div className="space-y-2">
+                    <div className="relative rounded-lg overflow-hidden h-36 bg-black/40">
+                      <img
+                        src={slide.image_url}
+                        alt={slide.caption || "Hero Slide"}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src =
+                            "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80";
+                        }}
+                      />
+                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-black/70 text-white border border-white/20">
+                        #{idx + 1}
+                      </div>
+                      <div className="absolute top-2 right-2">
+                        {slide.is_active ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/80 text-black">
+                            <CheckCircle2 className="w-3 h-3" /> Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-700 text-white">
+                            <XCircle className="w-3 h-3" /> Disabled
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground line-clamp-1">{slide.title || `Slide #${idx + 1}`}</p>
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{slide.caption || "No caption"}</p>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-border/40 mt-3 flex items-center justify-between gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleActiveMutation.mutate(slide)}
+                      className="text-xs h-7 px-2 border-white/20 hover:border-amber-400/40"
+                    >
+                      {slide.is_active ? "Deactivate" : "Activate"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm("Delete this slide image from homepage rotation?")) {
+                          deleteSlideMutation.mutate(slide.id);
+                        }
+                      }}
+                      className="text-xs h-7 px-2 text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 function HeroEditor({ content, onSave }: { content: Record<string, any>; onSave: SaveFn }) {
   const [title, setTitle] = useState(content.title || "");
@@ -177,7 +502,7 @@ function HeroEditor({ content, onSave }: { content: Record<string, any>; onSave:
           <label className="text-sm font-medium text-foreground mb-1 block">Button Text</label>
           <Input value={buttonText} onChange={(e) => setButtonText(e.target.value)} />
         </div>
-        <Button onClick={save} className="bg-gold text-navy hover:bg-gold/90">
+        <Button onClick={save} className="bg-gradient-to-r from-[#0B1E3D] via-[#142C54] to-[#0B1E3D] hover:from-[#133060] hover:to-[#1B3F78] text-white font-bold border border-amber-400/40 shadow-md">
           <Save className="h-4 w-4 mr-2" /> Save Changes
         </Button>
       </CardContent>
@@ -242,7 +567,7 @@ function AboutEditor({ content, onSave }: { content: Record<string, any>; onSave
             <Plus className="h-4 w-4 mr-1" /> Add Highlight
           </Button>
         </div>
-        <Button onClick={save} className="bg-gold text-navy hover:bg-gold/90">
+        <Button onClick={save} className="bg-gradient-to-r from-[#0B1E3D] via-[#142C54] to-[#0B1E3D] hover:from-[#133060] hover:to-[#1B3F78] text-white font-bold border border-amber-400/40 shadow-md">
           <Save className="h-4 w-4 mr-2" /> Save Changes
         </Button>
       </CardContent>
@@ -304,7 +629,7 @@ function PracticeAreasEditor({ content, onSave }: { content: Record<string, any>
             <Plus className="h-4 w-4 mr-1" /> Add Practice Area
           </Button>
         </div>
-        <Button onClick={save} className="bg-gold text-navy hover:bg-gold/90">
+        <Button onClick={save} className="bg-gradient-to-r from-[#0B1E3D] via-[#142C54] to-[#0B1E3D] hover:from-[#133060] hover:to-[#1B3F78] text-white font-bold border border-amber-400/40 shadow-md">
           <Save className="h-4 w-4 mr-2" /> Save Changes
         </Button>
       </CardContent>
@@ -368,7 +693,7 @@ function TeamEditor({ content, onSave }: { content: Record<string, any>; onSave:
             <Plus className="h-4 w-4 mr-1" /> Add Team Member
           </Button>
         </div>
-        <Button onClick={save} className="bg-gold text-navy hover:bg-gold/90">
+        <Button onClick={save} className="bg-gradient-to-r from-[#0B1E3D] via-[#142C54] to-[#0B1E3D] hover:from-[#133060] hover:to-[#1B3F78] text-white font-bold border border-amber-400/40 shadow-md">
           <Save className="h-4 w-4 mr-2" /> Save Changes
         </Button>
       </CardContent>
@@ -434,7 +759,7 @@ function ClientsEditor({ content, onSave }: { content: Record<string, any>; onSa
         <Button variant="outline" size="sm" onClick={() => setCategories([...categories, { icon: "Building2", title: "", clients: [] }])}>
           <Plus className="h-4 w-4 mr-1" /> Add Category
         </Button>
-        <Button onClick={save} className="bg-gold text-navy hover:bg-gold/90">
+        <Button onClick={save} className="bg-gradient-to-r from-[#0B1E3D] via-[#142C54] to-[#0B1E3D] hover:from-[#133060] hover:to-[#1B3F78] text-white font-bold border border-amber-400/40 shadow-md">
           <Save className="h-4 w-4 mr-2" /> Save Changes
         </Button>
       </CardContent>
@@ -519,7 +844,7 @@ function ContactEditor({ content, onSave }: { content: Record<string, any>; onSa
             <Plus className="h-4 w-4 mr-1" /> Add Office
           </Button>
         </div>
-        <Button onClick={save} className="bg-gold text-navy hover:bg-gold/90">
+        <Button onClick={save} className="bg-gradient-to-r from-[#0B1E3D] via-[#142C54] to-[#0B1E3D] hover:from-[#133060] hover:to-[#1B3F78] text-white font-bold border border-amber-400/40 shadow-md">
           <Save className="h-4 w-4 mr-2" /> Save Changes
         </Button>
       </CardContent>
@@ -546,9 +871,129 @@ function FooterEditor({ content, onSave }: { content: Record<string, any>; onSav
           <label className="text-sm font-medium text-foreground mb-1 block">Description</label>
           <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
         </div>
-        <Button onClick={save} className="bg-gold text-navy hover:bg-gold/90">
+        <Button onClick={save} className="bg-gradient-to-r from-[#0B1E3D] via-[#142C54] to-[#0B1E3D] hover:from-[#133060] hover:to-[#1B3F78] text-white font-bold border border-amber-400/40 shadow-md">
           <Save className="h-4 w-4 mr-2" /> Save Changes
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SecurityEditor() {
+  const { toast } = useToast();
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!currentPassword) {
+      toast({ title: "Required", description: "Please enter your current chamber passcode.", variant: "destructive" });
+      return;
+    }
+
+    if (newPassword.length < 4) {
+      toast({ title: "Invalid Length", description: "New password must be at least 4 characters.", variant: "destructive" });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Mismatch", description: "New password and confirmation do not match.", variant: "destructive" });
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const res = await api.changeAdminPassword(currentPassword, newPassword);
+      if (res.success) {
+        toast({
+          title: "Passcode Updated",
+          description: "Chamber admin passcode has been successfully changed.",
+        });
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    } catch (err: any) {
+      toast({
+        title: "Update Failed",
+        description: err.message || "Failed to update admin passcode. Check your current password.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  return (
+    <Card className="border-amber-400/20 glass-card max-w-2xl mx-auto">
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <KeyRound className="h-5 w-5 text-amber-300" />
+          <CardTitle className="font-serif">Chamber Admin Passcode & Security</CardTitle>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Update the confidential passcode used to authenticate and access this admin chamber portal.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handlePasswordChange} className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-foreground mb-1 block">Current Passcode *</label>
+            <Input
+              type="password"
+              placeholder="Enter current passcode"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              className="glass-input h-10 text-sm rounded-xl"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-foreground mb-1 block">New Passcode *</label>
+              <Input
+                type="password"
+                placeholder="Enter new passcode (min 4 chars)"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                className="glass-input h-10 text-sm rounded-xl"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-foreground mb-1 block">Confirm New Passcode *</label>
+              <Input
+                type="password"
+                placeholder="Re-enter new passcode"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                className="glass-input h-10 text-sm rounded-xl"
+              />
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-amber-400/10 border border-amber-400/20 flex items-start gap-2.5">
+            <ShieldAlert className="w-4 h-4 text-amber-300 mt-0.5 flex-shrink-0" />
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Once updated, the new passcode takes effect immediately across all sessions and persists in database storage.
+            </p>
+          </div>
+
+          <Button
+            type="submit"
+            disabled={isUpdating}
+            className="w-full bg-gradient-to-r from-[#0B1E3D] via-[#142C54] to-[#0B1E3D] hover:from-[#133060] hover:to-[#1B3F78] text-white font-bold h-11 rounded-xl border border-amber-400/40 shadow-md flex items-center justify-center gap-2"
+          >
+            <KeyRound className="h-4 w-4 text-amber-300" />
+            <span>{isUpdating ? "Updating Passcode..." : "Save & Update Passcode"}</span>
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );

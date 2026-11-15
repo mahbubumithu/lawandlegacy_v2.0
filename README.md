@@ -1,73 +1,65 @@
-# Welcome to your Lovable project
+# Law & Legacy — Premier Advocacy & Legal Chambers
 
-## Project info
+A distinguished, high-performance web platform for **Law & Legacy**, a premier advocacy firm in Bangladesh.
 
-**URL**: https://lovable.dev/projects/70e6e616-4034-4b43-8384-60a9ce4486c3
+Featuring an **Ultra-Sleek Glassmorphic Design System**, polished legal chamber typography, self-contained local data persistence, and complete **Docker local containerization**.
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## ✨ Firm Capabilities & Features
 
-**Use Lovable**
+- **Glassmorphism Design System**: Radiant frosted glass panels, ambient mesh backdrops, interactive hover sheen cards, and a Dark/Light crystal glass theme toggle.
+- **Rearranged Practice-First Layout**: Immediate exposure of 12 core practice areas, chamber leadership ethos, advocate credentials, and corporate client enlistments.
+- **Confidential Consultation Intake**: Integrated direct consultation booking on the landing page with instant case docket reference generation.
+- **Chamber Portal (`/admin`)**: Content management console to update practice areas, team profiles, legal notices, and chamber dispatches.
+- **Local Persistence & Deployment**: Self-contained local deployment with Docker containerization and persistent data volume.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/70e6e616-4034-4b43-8384-60a9ce4486c3) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🚀 Running in Docker (Local)
 
-**Use your preferred IDE**
+The application is pre-configured with multi-stage Docker builds and persistent volume storage.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### 1. Start the Container
+```bash
+docker compose up -d --build
+```
+The application will build and run on **http://localhost:3000**.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### 2. Check Container Health & Status
+```bash
+docker ps --filter "name=lawandlegacy-app"
+docker logs -f lawandlegacy-app
+```
 
-Follow these steps:
+### 3. Stop the Container
+```bash
+docker compose down
+```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+---
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## 🛠️ Local Development (Without Docker)
 
-# Step 3: Install the necessary dependencies.
-npm i
+You can also run locally with Node.js:
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Run the chamber backend server (Port 3000)
+npm run server
+
+# 3. In another terminal, run the Vite development server (Port 5173)
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 🔐 Credentials & Ports
 
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/70e6e616-4034-4b43-8384-60a9ce4486c3) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+| Service | Address | Access |
+|---|---|---|
+| **Chamber Web Platform** | `http://localhost:3000` | Public Access |
+| **Chamber Portal** | `http://localhost:3000/admin` | Passcode: `admin123` |
+| **System Healthcheck** | `http://localhost:3000/api/health` | Public Access |
