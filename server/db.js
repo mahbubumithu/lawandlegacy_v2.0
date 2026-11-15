@@ -456,4 +456,62 @@ if (countLogs.count === 0) {
   }
 }
 
+// Check and restore from GitHub backup JSON if available and DB is new/empty
+try {
+  const backupJsonPath = path.join(__dirname, '../data/database_backup.json');
+  if (fs.existsSync(backupJsonPath)) {
+    const siteRows = db.prepare('SELECT COUNT(*) as count FROM site_content').get();
+    if (siteRows.count === 0) {
+      console.log('[DB] Found data/database_backup.json. Restoring snapshot into SQLite...');
+      const backupData = JSON.parse(fs.readFileSync(backupJsonPath, 'utf8'));
+
+      if (backupData.site_content) {
+        const insertContent = db.prepare(`
+          INSERT INTO site_content (id, section, key, value) 
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(section, key) DO UPDATE SET value = excluded.value
+        `);
+        for (const [sec, items] of Object.entries(backupData.site_content)) {
+          for (const [k, val] of Object.entries(items)) {
+            insertContent.run(`${sec}_${k}`, sec, k, JSON.stringify(val));
+          }
+        }
+      }
+
+      if (Array.isArray(backupData.events) && backupData.events.length > 0) {
+        const insertEv = db.prepare(`
+          INSERT OR REPLACE INTO events (id, title, description, event_url, image_url, event_date, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const ev of backupData.events) {
+          insertEv.run(ev.id, ev.title, ev.description, ev.event_url, ev.image_url, ev.event_date, ev.created_at);
+        }
+      }
+
+      if (Array.isArray(backupData.slides) && backupData.slides.length > 0) {
+        const insertSl = db.prepare(`
+          INSERT OR REPLACE INTO slides (id, title, caption, image_url, display_order, is_active, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const sl of backupData.slides) {
+          insertSl.run(sl.id, sl.title, sl.caption, sl.image_url, sl.display_order, sl.is_active ? 1 : 0, sl.created_at, sl.updated_at);
+        }
+      }
+
+      if (Array.isArray(backupData.settings) && backupData.settings.length > 0) {
+        const insertSt = db.prepare(`
+          INSERT OR REPLACE INTO admin_settings (key, value)
+          VALUES (?, ?)
+        `);
+        for (const st of backupData.settings) {
+          insertSt.run(st.key, st.value);
+        }
+      }
+      console.log('[DB] Restore completed successfully.');
+    }
+  }
+} catch (restoreErr) {
+  console.warn('[DB] Could not restore from database_backup.json:', restoreErr.message);
+}
+
 export default db;

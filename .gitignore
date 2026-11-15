@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# SQLite database files (keep JSON backups committed, ignore local binary db)
+data/*.db
+data/*.db-wal
+data/*.db-shm

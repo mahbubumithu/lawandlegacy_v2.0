@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import db from './db.js';
+import { triggerGitHubSync, syncImageFileToGitHub } from './githubSync.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -96,6 +97,7 @@ app.post('/api/admin/change-password', (req, res) => {
 
   try {
     setAdminPasswordInDb(newPassword.trim());
+    triggerGitHubSync('Admin passcode updated');
     return res.json({ success: true, message: 'Password updated successfully' });
   } catch (err) {
     console.error('Error updating admin password:', err);
@@ -165,6 +167,7 @@ app.post('/api/site-content', (req, res) => {
         updated_at = CURRENT_TIMESTAMP
     `);
     stmt.run(id, section, key, stringVal);
+    triggerGitHubSync(`Updated site section [${section}] key [${key}]`);
     res.json({ success: true, section, key });
   } catch (err) {
     console.error('Error updating site content:', err);
@@ -197,6 +200,7 @@ app.post('/api/events', (req, res) => {
     `);
     stmt.run(id, title, description || null, event_url || null, image_url || null, event_date || null);
     const created = db.prepare('SELECT * FROM events WHERE id = ?').get(id);
+    triggerGitHubSync(`Added event "${title}"`);
     res.status(201).json(created);
   } catch (err) {
     console.error('Error creating event:', err);
@@ -211,6 +215,7 @@ app.delete('/api/events/:id', (req, res) => {
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Event not found' });
     }
+    triggerGitHubSync(`Deleted event ID ${req.params.id}`);
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting event:', err);
@@ -244,6 +249,9 @@ app.post('/api/upload', (req, res) => {
     const generatedFileName = `slide_${Date.now()}_${cleanName}.${ext}`;
     const filePath = path.join(uploadsDir, generatedFileName);
     fs.writeFileSync(filePath, buffer);
+
+    // Sync image file to GitHub asynchronously
+    syncImageFileToGitHub(`uploads/${generatedFileName}`, buffer, `Upload slide asset: ${generatedFileName}`);
 
     const publicUrl = `/uploads/${generatedFileName}`;
     res.json({ success: true, url: publicUrl, fileName: generatedFileName });
@@ -285,6 +293,7 @@ app.post('/api/slides', (req, res) => {
     `).run(id, title || 'Chamber Slide', caption || '', image_url, order, active);
 
     const created = db.prepare('SELECT * FROM slides WHERE id = ?').get(id);
+    triggerGitHubSync(`Added new slide "${title || 'Chamber Slide'}"`);
     res.status(201).json({ ...created, is_active: Boolean(created.is_active) });
   } catch (err) {
     console.error('Error creating slide:', err);
@@ -313,6 +322,7 @@ app.put('/api/slides/:id', (req, res) => {
     `).run(newTitle, newCaption, newImageUrl, newOrder, newActive, req.params.id);
 
     const updated = db.prepare('SELECT * FROM slides WHERE id = ?').get(req.params.id);
+    triggerGitHubSync(`Updated slide "${newTitle}"`);
     res.json({ ...updated, is_active: Boolean(updated.is_active) });
   } catch (err) {
     console.error('Error updating slide:', err);
@@ -327,6 +337,7 @@ app.delete('/api/slides/:id', (req, res) => {
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Slide not found' });
     }
+    triggerGitHubSync(`Deleted slide ID ${req.params.id}`);
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting slide:', err);
