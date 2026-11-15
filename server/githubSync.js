@@ -142,3 +142,4 @@ export async function syncImageFileToGitHub(relativeFilePath, fileBuffer, commit
     console.error(`[GitHub Sync] Error syncing image ${relativeFilePath} to GitHub:`, err.message);
   }
 }
+
